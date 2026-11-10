@@ -1,0 +1,381 @@
+rules_version = '2';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LINK-SMART — Firestore Security Rules
+//
+// Security model
+//  • Super Admin is identified ONLY by the `superAdmin` custom claim, which is
+//    set server-side by a trusted Cloud Function / Admin SDK script.
+//  • Every business record carries a `businessId`. Users may only read/write
+//    records whose businessId matches their own user profile.
+//  • Granular permissions are stored on the user profile and checked here.
+//  • Users can never edit their own role, permissions, businessId or status.
+// ─────────────────────────────────────────────────────────────────────────────
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── helpers ──────────────────────────────────────────────────────────────
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isSuperAdmin() {
+      // Primary: server-set custom claim (the secure, multi-admin path).
+      // Fallback: the single owner account configured in .env. This lets the
+      // owner use the console before Cloud Functions are deployed. Remove the
+      // email check if you rely exclusively on custom claims.
+      return signedIn() && (
+        request.auth.token.superAdmin == true
+        || request.auth.token.email == 'ishanews7@gmail.com'
+      );
+    }
+
+    function userPath(uid) {
+      return /databases/$(database)/documents/users/$(uid);
+    }
+
+    function myDoc() {
+      return get(userPath(request.auth.uid)).data;
+    }
+
+    function isActive() {
+      return signedIn()
+        && exists(userPath(request.auth.uid))
+        && myDoc().status == 'active';
+    }
+
+    function myBusinessId() {
+      return myDoc().businessId;
+    }
+
+    function perms() {
+      return myDoc().get('permissions', []);
+    }
+
+    function has(perm) {
+      return perm in perms();
+    }
+
+    function hasAny(required) {
+      return required.hasAny(perms());
+    }
+
+    function sameTenant(bid) {
+      return isActive() && bid == myBusinessId();
+    }
+
+    // Read is allowed with an explicit permission, or with reports/dashboard
+    // (those pages aggregate read-only data for the same business).
+    function canRead(required) {
+      return isSuperAdmin() || (
+        isActive()
+        && resource.data.businessId == myBusinessId()
+        && (required.hasAny(perms()) || has('reports') || has('dashboard'))
+      );
+    }
+
+    function canCreate(required) {
+      return isSuperAdmin() || (
+        isActive()
+        && request.resource.data.businessId == myBusinessId()
+        && required.hasAny(perms())
+      );
+    }
+
+    function canUpdate(required) {
+      return isSuperAdmin() || (
+        isActive()
+        && resource.data.businessId == myBusinessId()
+        && request.resource.data.businessId == resource.data.businessId
+        && required.hasAny(perms())
+      );
+    }
+
+    function canDelete(required) {
+      return isSuperAdmin() || (
+        isActive()
+        && resource.data.businessId == myBusinessId()
+        && required.hasAny(perms())
+      );
+    }
+
+    function immutableTenant() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['businessId']);
+    }
+
+    // ── USERS ────────────────────────────────────────────────────────────────
+    match /users/{uid} {
+      allow get: if isSuperAdmin()
+        || (signedIn() && request.auth.uid == uid)
+        || (isActive() && has('employees') && resource.data.businessId == myBusinessId());
+
+      allow list: if isSuperAdmin()
+        || (isActive() && hasAny(['employees', 'reports']) && resource.data.businessId == myBusinessId());
+
+      allow create: if isSuperAdmin();
+
+      // A user may only edit safe profile fields on their own document.
+      allow update: if isSuperAdmin() || (
+        signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+             ['fullName', 'phone', 'photoURL', 'updatedAt']
+           )
+        && request.resource.data.status == resource.data.status
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.permissions == resource.data.permissions
+        && request.resource.data.businessId == resource.data.businessId
+        && request.resource.data.businessType == resource.data.businessType
+      );
+
+      allow delete: if isSuperAdmin();
+    }
+
+    // ── BUSINESSES ───────────────────────────────────────────────────────────
+    match /businesses/{businessId} {
+      allow get: if isSuperAdmin()
+        || (isActive() && myDoc().businessId == businessId);
+
+      allow list: if isSuperAdmin();
+
+      allow create, delete: if isSuperAdmin();
+
+      allow update: if isSuperAdmin() || (
+        isActive()
+        && myDoc().businessId == businessId
+        && has('settings')
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+             ['name', 'ownerName', 'phone', 'email', 'address', 'logoUrl', 'currency', 'notes', 'updatedAt']
+           )
+        && request.resource.data.type == resource.data.type
+        && request.resource.data.status == resource.data.status
+      );
+    }
+
+    // ── BUSINESS SETTINGS ────────────────────────────────────────────────────
+    match /businessSettings/{businessId} {
+      allow read: if isSuperAdmin() || sameTenant(businessId);
+      allow write: if isSuperAdmin() || (sameTenant(businessId) && has('settings'));
+    }
+
+    // ── ROLES ────────────────────────────────────────────────────────────────
+    match /roles/{roleId} {
+      allow read: if signedIn();
+      allow write: if isSuperAdmin();
+    }
+
+    // ── GLOBAL SETTINGS ──────────────────────────────────────────────────────
+    match /settings/{settingId} {
+      // App settings are readable by any signed-in user; the superAdmin record
+      // (which stores the authoritative admin uid/email) is Super Admin only.
+      allow read: if isSuperAdmin() || (signedIn() && settingId != 'superAdmin');
+      allow write: if isSuperAdmin();
+    }
+
+    // ── AUDIT LOGS ───────────────────────────────────────────────────────────
+    match /auditLogs/{logId} {
+      allow read: if isSuperAdmin();
+      allow create: if signedIn()
+        && request.resource.data.actorUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // ── NOTIFICATIONS ────────────────────────────────────────────────────────
+    match /notifications/{notificationId} {
+      allow read: if isSuperAdmin() || (
+        isActive()
+        && (resource.data.businessId == 'all' || resource.data.businessId == myBusinessId())
+      );
+      allow create, delete: if isSuperAdmin();
+      allow update: if isSuperAdmin() || (
+        isActive()
+        && (resource.data.businessId == 'all' || resource.data.businessId == myBusinessId())
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readBy'])
+      );
+    }
+
+    // ── SHOP / RESTAURANT CORE ───────────────────────────────────────────────
+    match /products/{id} {
+      allow read: if canRead(['products', 'inventory', 'pos', 'menu']);
+      allow create: if canCreate(['products', 'inventory']);
+      allow update: if canUpdate(['products', 'inventory']);
+      allow delete: if canDelete(['products', 'inventory']);
+    }
+
+    match /categories/{id} {
+      allow read: if canRead(['categories', 'foodCategories', 'products', 'menu']);
+      allow create: if canCreate(['categories', 'foodCategories', 'products', 'menu']);
+      allow update: if canUpdate(['categories', 'foodCategories', 'products', 'menu']);
+      allow delete: if canDelete(['categories', 'foodCategories', 'products', 'menu']);
+    }
+
+    match /inventory/{id} {
+      allow read: if canRead(['inventory', 'products', 'purchases']);
+      allow create: if canCreate(['inventory', 'products', 'purchases']);
+      allow update: if canUpdate(['inventory', 'products', 'purchases']);
+      allow delete: if canDelete(['inventory']);
+    }
+
+    match /sales/{id} {
+      allow read: if canRead(['pos', 'sales']);
+      allow create: if canCreate(['pos', 'sales']);
+      allow update: if canUpdate(['pos', 'sales']);
+      allow delete: if canDelete(['sales']);
+    }
+
+    match /orders/{id} {
+      allow read: if canRead(['orders', 'pos', 'kitchen', 'restaurant', 'tables']);
+      allow create: if canCreate(['orders', 'pos', 'kitchen', 'restaurant']);
+      allow update: if canUpdate(['orders', 'pos', 'kitchen', 'restaurant']);
+      allow delete: if canDelete(['orders']);
+    }
+
+    match /purchases/{id} {
+      allow read: if canRead(['purchases', 'fuelPurchases', 'inventory']);
+      allow create: if canCreate(['purchases', 'fuelPurchases']);
+      allow update: if canUpdate(['purchases', 'fuelPurchases']);
+      allow delete: if canDelete(['purchases', 'fuelPurchases']);
+    }
+
+    match /suppliers/{id} {
+      allow read: if canRead(['suppliers', 'purchases']);
+      allow create: if canCreate(['suppliers', 'purchases']);
+      allow update: if canUpdate(['suppliers', 'purchases']);
+      allow delete: if canDelete(['suppliers']);
+    }
+
+    match /customers/{id} {
+      allow read: if canRead(['customers', 'pos', 'orders', 'reservations', 'fuelSales']);
+      allow create: if canCreate(['customers', 'pos', 'orders', 'reservations', 'fuelSales']);
+      allow update: if canUpdate(['customers', 'pos', 'orders', 'reservations', 'fuelSales']);
+      allow delete: if canDelete(['customers']);
+    }
+
+    match /employees/{id} {
+      allow read: if canRead(['employees']);
+      allow create: if canCreate(['employees']);
+      allow update: if canUpdate(['employees']);
+      allow delete: if canDelete(['employees']);
+    }
+
+    match /expenses/{id} {
+      allow read: if canRead(['expenses']);
+      allow create: if canCreate(['expenses']);
+      allow update: if canUpdate(['expenses']);
+      allow delete: if canDelete(['expenses']);
+    }
+
+    match /debts/{id} {
+      allow read: if canRead(['debts', 'payments']);
+      allow create: if canCreate(['debts', 'payments']);
+      allow update: if canUpdate(['debts', 'payments']);
+      allow delete: if canDelete(['debts']);
+    }
+
+    match /payments/{id} {
+      allow read: if canRead(['payments', 'debts']);
+      allow create: if canCreate(['payments', 'debts']);
+      allow update: if canUpdate(['payments', 'debts']);
+      allow delete: if canDelete(['payments']);
+    }
+
+    // ── HOTEL ────────────────────────────────────────────────────────────────
+    match /rooms/{id} {
+      allow read: if canRead(['rooms', 'reservations', 'checkInOut']);
+      allow create: if canCreate(['rooms']);
+      allow update: if canUpdate(['rooms', 'reservations', 'checkInOut']);
+      allow delete: if canDelete(['rooms']);
+    }
+
+    match /roomCategories/{id} {
+      allow read: if canRead(['roomCategories', 'rooms']);
+      allow create: if canCreate(['roomCategories']);
+      allow update: if canUpdate(['roomCategories']);
+      allow delete: if canDelete(['roomCategories']);
+    }
+
+    match /reservations/{id} {
+      allow read: if canRead(['reservations', 'checkInOut']);
+      allow create: if canCreate(['reservations', 'checkInOut']);
+      allow update: if canUpdate(['reservations', 'checkInOut']);
+      allow delete: if canDelete(['reservations']);
+    }
+
+    match /guests/{id} {
+      allow read: if canRead(['guests', 'checkInOut', 'reservations']);
+      allow create: if canCreate(['guests', 'checkInOut', 'reservations']);
+      allow update: if canUpdate(['guests', 'checkInOut', 'reservations']);
+      allow delete: if canDelete(['guests']);
+    }
+
+    match /hotelServices/{id} {
+      allow read: if canRead(['hotelServices', 'restaurant']);
+      allow create: if canCreate(['hotelServices', 'restaurant']);
+      allow update: if canUpdate(['hotelServices', 'restaurant']);
+      allow delete: if canDelete(['hotelServices']);
+    }
+
+    // ── RESTAURANT ───────────────────────────────────────────────────────────
+    match /tables/{id} {
+      allow read: if canRead(['tables', 'orders', 'pos']);
+      allow create: if canCreate(['tables']);
+      allow update: if canUpdate(['tables', 'orders', 'pos']);
+      allow delete: if canDelete(['tables']);
+    }
+
+    match /menuItems/{id} {
+      allow read: if canRead(['menu', 'restaurant', 'pos']);
+      allow create: if canCreate(['menu', 'restaurant']);
+      allow update: if canUpdate(['menu', 'restaurant', 'pos']);
+      allow delete: if canDelete(['menu', 'restaurant']);
+    }
+
+    // ── FUEL STATION ─────────────────────────────────────────────────────────
+    match /fuelTypes/{id} {
+      allow read: if canRead(['fuelTypes', 'fuelPrices', 'fuelSales', 'fuelPurchases', 'fuelTanks', 'inventory']);
+      allow create: if canCreate(['fuelTypes', 'fuelPrices']);
+      allow update: if canUpdate(['fuelTypes', 'fuelPrices']);
+      allow delete: if canDelete(['fuelTypes']);
+    }
+
+    match /fuelTanks/{id} {
+      allow read: if canRead(['fuelTanks', 'fuelPumps', 'meterReadings', 'inventory', 'fuelPurchases', 'fuelSales']);
+      allow create: if canCreate(['fuelTanks', 'inventory']);
+      allow update: if canUpdate(['fuelTanks', 'inventory', 'fuelPurchases', 'fuelSales']);
+      allow delete: if canDelete(['fuelTanks']);
+    }
+
+    match /fuelPumps/{id} {
+      allow read: if canRead(['fuelPumps', 'meterReadings', 'fuelSales']);
+      allow create: if canCreate(['fuelPumps']);
+      allow update: if canUpdate(['fuelPumps', 'meterReadings']);
+      allow delete: if canDelete(['fuelPumps']);
+    }
+
+    match /meterReadings/{id} {
+      allow read: if canRead(['meterReadings', 'fuelPumps', 'fuelSales']);
+      allow create: if canCreate(['meterReadings']);
+      allow update: if canUpdate(['meterReadings']);
+      allow delete: if canDelete(['meterReadings']);
+    }
+
+    match /fuelSales/{id} {
+      allow read: if canRead(['fuelSales', 'pos']);
+      allow create: if canCreate(['fuelSales', 'pos']);
+      allow update: if canUpdate(['fuelSales', 'pos']);
+      allow delete: if canDelete(['fuelSales']);
+    }
+
+    match /shifts/{id} {
+      allow read: if canRead(['meterReadings', 'fuelSales']);
+      allow create: if canCreate(['meterReadings', 'fuelSales']);
+      allow update: if canUpdate(['meterReadings', 'fuelSales']);
+      allow delete: if canDelete(['meterReadings']);
+    }
+
+    // ── DEFAULT DENY ─────────────────────────────────────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

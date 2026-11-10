@@ -1,0 +1,33 @@
+{
+  "indexes": [
+    { "collectionGroup": "products", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "businessId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "categories", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "businessId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "inventory", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "businessId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "sales", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "businessId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "orders", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "businessId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "purchases", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "businessId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "suppliers", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "businessId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "customers", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "businessId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "employees", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "businessId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "expenses", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "businessId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "debts", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "businessId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "payments", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "businessId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "rooms", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "businessId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "roomCategories", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "businessId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "reservations", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "businessId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "guests", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "businessId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "hotelServices", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "businessId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "tables", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "businessId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "menuItems", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "businessId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "fuelTypes", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "businessId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "fuelTanks", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "businessId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "fuelPumps", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "businessId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "meterReadings", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "businessId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "fuelSales", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "businessId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "shifts", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "businessId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "users", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "businessId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "notifications", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "businessId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }] },
+    { "collectionGroup": "auditLogs", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "createdAt", "order": "DESCENDING" }] }
+  ],
+  "fieldOverrides": []
+}
